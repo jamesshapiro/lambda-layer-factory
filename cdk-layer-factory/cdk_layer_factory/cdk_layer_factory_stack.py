@@ -107,6 +107,7 @@ class CdkLayerFactoryStack(Stack):
         email_recipient_state = tasks.SnsPublish(self, "Send Email",
             topic=topic,
             message=stepfunctions.TaskInput.from_json_path_at("$.taskresult.message"),
+            subject=stepfunctions.JsonPath.string_at("$.taskresult.subject")
         )
 
         definition = start_ec2_state.next(email_recipient_state)
