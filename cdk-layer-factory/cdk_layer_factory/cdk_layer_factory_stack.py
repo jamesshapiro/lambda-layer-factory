@@ -6,7 +6,9 @@ from aws_cdk import (
     aws_s3 as s3,
     aws_stepfunctions as stepfunctions,
     aws_stepfunctions_tasks as tasks,
-    aws_apigateway as apigateway
+    aws_apigateway as apigateway,
+    aws_sns as sns,
+    aws_sns_subscriptions as subscriptions,
 )
 
 import aws_cdk as cdk
@@ -21,6 +23,7 @@ class CdkLayerFactoryStack(Stack):
             # .cdk-params should be of the form:
             # account_id=12345678901234
             account_id = [line for line in lines if line.startswith('account_id')][0].split('=')[1]
+            email = [line for line in lines if line.startswith('email')][0].split('=')[1]
 
         run_ec2_lambda_policy = iam.Policy(
             self, 'cdk-layer-factory-start-creation-policy',
@@ -98,17 +101,15 @@ class CdkLayerFactoryStack(Stack):
             timeout=Duration.hours(1)
         )
 
-        # email_recipient = tasks.CallAwsService(self, "Send Email",
-        #     service="ses",
-        #     action="sendEmail",
-        #     parameters={
-        #         "Destination": {}
-        #         "Key": sfn.JsonPath.string_at("$.key")
-        #     },
-        #     iam_resources=[my_bucket.arn_for_objects("*")]
-        # )
+        topic = sns.Topic(self, "CDKLambdaFactoryTopic")
+        topic.add_subscription(subscriptions.EmailSubscription(email))
 
-        definition = start_ec2_state
+        email_recipient_state = tasks.SnsPublish(self, "Send Email",
+            topic=topic,
+            message=stepfunctions.TaskInput.from_json_path_at("$.taskresult.message"),
+        )
+
+        definition = start_ec2_state.next(email_recipient_state)
 
         state_machine = stepfunctions.StateMachine(self, "cdk-sfn-demo-state-machine",
             definition=definition

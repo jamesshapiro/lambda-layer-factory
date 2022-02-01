@@ -49,11 +49,11 @@ def lambda_handler(event, context):
         f'aws s3 cp archive.zip s3://{layer_dest_bucket}/{lib_pip_name}-{version.replace(".","-")}-{datetime_str}',
         layer_publish_command,
         # TODO: make region configurable
-        f'aws stepfunctions send-task-success --task-token "{token}" --task-output \'{{"result": "Success!"}}\' --region us-east-1',
+        f'aws stepfunctions send-task-success --task-token "{token}" --task-output \'{{"result": "Success!", "message": "Layer is Ready"}}\' --region us-east-1',
         'shutdown -h now'
     ]
     init_script.extend(init_script_wrapup)
-    init_script = '\n ; \n'.join(init_script)
+    init_script = '\n\n'.join(init_script)
     response = ec2_client.run_instances(
         ImageId=ami_id,
         InstanceType=instance_type,
