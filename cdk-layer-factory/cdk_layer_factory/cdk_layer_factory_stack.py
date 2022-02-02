@@ -56,7 +56,7 @@ class CdkLayerFactoryStack(Stack):
             self, 'cdk-layer-factory-ec2-s3-write-layer-publish-policy',
             statements=[
                 iam.PolicyStatement(
-                    actions=['s3:PutObject'],
+                    actions=['s3:PutObject', 's3:GetObject'],
                     resources=[layer_bucket.bucket_arn, f'{layer_bucket.bucket_arn}/*']
                 ),
                 iam.PolicyStatement(
@@ -103,6 +103,9 @@ class CdkLayerFactoryStack(Stack):
 
         topic = sns.Topic(self, "CDKLambdaFactoryTopic")
         topic.add_subscription(subscriptions.EmailSubscription(email))
+
+        #print(stepfunctions.JsonPath.__dir__(self))
+        #stepfunctions.JsonPath.array(stepfunctions.JsonPath.string_at("$.email"))
 
         email_recipient_state = tasks.SnsPublish(self, "Send Email",
             topic=topic,
