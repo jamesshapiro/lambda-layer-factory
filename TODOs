@@ -1,0 +1,7 @@
+- Finish reaper function
+- Add language support for other languages
+- Add front-end UI
+- "Pre-bake" AMI with Docker and relevant images
+- Add SQS queue to throttle number of simultaneous EC2 instances running
+- Cache popular layers
+- Add support for DL-ing multiple libraries, not just a single library
