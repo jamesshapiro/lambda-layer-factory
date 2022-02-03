@@ -24,7 +24,8 @@ class CdkLayerFactoryStack(Stack):
             # account_id=12345678901234
             account_id = [line for line in lines if line.startswith('account_id')][0].split('=')[1]
             email = [line for line in lines if line.startswith('email')][0].split('=')[1]
-
+            sender = [line for line in lines if line.startswith('sender')][0].split('=')[1]
+            region = [line for line in lines if line.startswith('region')][0].split('=')[1]
         run_ec2_lambda_policy = iam.Policy(
             self, 'cdk-layer-factory-start-creation-policy',
             statements=[
@@ -104,13 +105,27 @@ class CdkLayerFactoryStack(Stack):
         topic = sns.Topic(self, "CDKLambdaFactoryTopic")
         topic.add_subscription(subscriptions.EmailSubscription(email))
 
-        #print(stepfunctions.JsonPath.__dir__(self))
-        #stepfunctions.JsonPath.array(stepfunctions.JsonPath.string_at("$.email"))
-
-        email_recipient_state = tasks.SnsPublish(self, "Send Email",
-            topic=topic,
-            message=stepfunctions.TaskInput.from_json_path_at("$.taskresult.message"),
-            subject=stepfunctions.JsonPath.string_at("$.taskresult.subject")
+        email_recipient_state = tasks.CallAwsService(self, "SendEmail",
+            service="ses",
+            action="sendEmail",
+            parameters={
+                "Destination": {
+                    "ToAddresses": stepfunctions.JsonPath.array(stepfunctions.JsonPath.string_at("$.email"))
+                },
+                "Message": {
+                    "Body": {
+                        "Html": {
+                            "Data": stepfunctions.JsonPath.format('<html><h3>Lambda Layer Created!</h3><p>Click <a href="{}">here</a> to download. Link good for 6 hours.</p>', stepfunctions.JsonPath.string_at("$.taskresult.presigned_url"))
+                        }
+                    },
+                    "Subject": {
+                        "Data": stepfunctions.JsonPath.format('SUBJECT: {}', stepfunctions.JsonPath.string_at("$.taskresult.layer_name"))
+                    }
+                },
+                "Source": f'JS Comment Validator <{sender}>'
+            },
+            iam_action='ses:SendEmail',
+            iam_resources=[f'arn:aws:ses:{region}:{account_id}:identity/{sender}']
         )
 
         definition = start_ec2_state.next(email_recipient_state)

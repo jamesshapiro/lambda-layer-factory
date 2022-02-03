@@ -4,7 +4,8 @@ import os
 
 ec2_client = boto3.client('ec2')
 iam_client = boto3.client('iam')
-ami_id = 'ami-0a8b4cd432b1c3063'
+#ami_id = 'ami-0a8b4cd432b1c3063'
+ami_id = 'ami-0ef2003049dd4c459'
 instance_type = 't3.small'
 key_name = 'key.pem'
 subnet_id = 'subnet-c06751cf'
@@ -26,15 +27,15 @@ def lambda_handler(event, context):
     python_versions = my_input['python_versions']
     init_script = [
         '#!/bin/bash',
-        'sleep 60\n'
+        #'sleep 60\n'
         'cd ~\n'
-        'sudo yum update -y\n',
-        'sudo yum install ec2-instance-connect -y',
-        'sudo yum search docker',
-        'sudo yum install docker -y',
-        'sudo systemctl enable docker.service',
-        'sudo systemctl start docker.service',
-        'sudo systemctl status docker.service',
+        #'sudo yum update -y\n',
+        #'sudo yum install ec2-instance-connect -y',
+        #'sudo yum search docker',
+        #'sudo yum install docker -y',
+        #'sudo systemctl enable docker.service',
+        #'sudo systemctl start docker.service',
+        #'sudo systemctl status docker.service',
         f'echo "{lib_pip_name}=={version}" >> requirements.txt',
     ]
     # e.g. ['python3.8', 'python3.9']
@@ -52,8 +53,8 @@ def lambda_handler(event, context):
         'export PRESIGNED_URL=$(cat presigned)',
         layer_publish_command,
         # TODO: make region configurable
-        f'aws stepfunctions send-task-success --task-token "{token}" --task-output "{{{esc_quote}result{esc_quote}: {esc_quote}Success!{esc_quote}, {esc_quote}message{esc_quote}: {esc_quote}Click Here to Download Layer .zip File: $PRESIGNED_URL{esc_quote}, {esc_quote}subject{esc_quote}: {esc_quote}Layer Factory: {lib_pip_name}-{version}{esc_quote}}}" --region us-east-1',
-        #'shutdown -h now'
+        f'aws stepfunctions send-task-success --task-token "{token}" --task-output "{{{esc_quote}result{esc_quote}: {esc_quote}Success!{esc_quote}, {esc_quote}presigned_url{esc_quote}: {esc_quote}$PRESIGNED_URL{esc_quote}, {esc_quote}layer_name{esc_quote}: {esc_quote}{lib_pip_name}-{version}{esc_quote}}}" --region us-east-1',
+        'shutdown -h now'
     ]
     init_script.extend(init_script_wrapup)
     init_script = '\n\n'.join(init_script)
