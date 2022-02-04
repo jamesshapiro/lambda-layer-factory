@@ -9,6 +9,8 @@ from aws_cdk import (
     aws_apigateway as apigateway,
     aws_sns as sns,
     aws_sns_subscriptions as subscriptions,
+    aws_events as events,
+    aws_events_targets as targets,
 )
 
 import aws_cdk as cdk
@@ -70,6 +72,51 @@ class CdkLayerFactoryStack(Stack):
                     resources=['*']
                 ),
             ]
+        )
+
+        pytz_layer = lambda_.LayerVersion(
+            self, "pytz-layer",
+            removal_policy=cdk.RemovalPolicy.DESTROY,
+            code=lambda_.Code.from_asset('layers/pytz-2021.1.zip'),
+            compatible_architectures=[lambda_.Architecture.X86_64]
+        )
+
+        reap_ec2_instances_function_cdk = lambda_.Function(
+            self, 'cdk-layer-factory-reap-instances',
+            runtime=lambda_.Runtime.PYTHON_3_8,
+            code=lambda_.Code.from_asset('resources'),
+            handler='reap_instances.lambda_handler',
+            timeout=Duration.seconds(120),
+            memory_size=128,
+            environment={
+                'EC2_REGION': region
+            },
+            layers=[pytz_layer]
+        )
+
+        lambda_ec2_reaper_policy = iam.Policy(
+            self, 'cdk-layer-factory-lambda-ec2-reaper-policy',
+            statements=[
+                iam.PolicyStatement(
+                    actions=['ec2:TerminateInstances'],
+                    resources=['*'],
+                    conditions={
+                        'StringEquals': {'ec2:ResourceTag/APPLICATION': 'CDK_LAMBDA_LAYER_FACTORY'} 
+                    }
+                ),
+                iam.PolicyStatement(
+                    actions=['ec2:DescribeInstances'],
+                    resources=['*']
+                )
+            ]
+        )
+
+        reap_ec2_instances_function_cdk.role.attach_inline_policy(lambda_ec2_reaper_policy)
+        lambda_target = targets.LambdaFunction(reap_ec2_instances_function_cdk)
+
+        cron_rule = events.Rule(self, "ScheduleRule",
+            schedule=events.Schedule.cron(minute="*", hour="*"),
+            targets=[lambda_target]
         )
 
         ec2_role.attach_inline_policy(ec2_policy)

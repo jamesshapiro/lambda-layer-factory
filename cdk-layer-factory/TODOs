@@ -1,4 +1,3 @@
-[ ] Finish reaper function
 [ ] Add support for other languages
 [ ] Add front-end UI
 [ ] Add SQS queue to rate limit the number of simultaneous EC2 instances running
@@ -7,3 +6,4 @@
 
 [x] Add native SES integration!
 [x] "Pre-bake" AMI with Docker and relevant images (Python)
+[x] Finish reaper function
