@@ -177,7 +177,7 @@ class CdkLayerFactoryStack(Stack):
 
         definition = start_ec2_state.next(email_recipient_state)
 
-        state_machine = stepfunctions.StateMachine(self, "cdk-sfn-demo-state-machine",
+        state_machine = stepfunctions.StateMachine(self, "cdk-lambda-layer-factory-state-machine",
             definition=definition
         )
 
