@@ -1,6 +1,7 @@
 import boto3
 import datetime
 import os
+import sys
 
 ec2_client = boto3.client('ec2')
 iam_client = boto3.client('iam')
@@ -14,16 +15,17 @@ instance_profile_arn = os.environ['INSTANCE_PROFILE_ARN']
 layer_dest_bucket = os.environ['LAYER_DEST_BUCKET']
 
 def lambda_handler(event, context):
+    print(f'{event=}')
     token = event['token']
     my_input = event['input']
     now = datetime.datetime.now()
     datetime_str = f'{now.year}-{now.month}-{now.day}-{now.hour}:{now.minute}:{now.second}'
     # e.g. 'ulid-py'
 
-    lib_pip_name = my_input['lib_pip_name']
+    dependencies = my_input['dependencies'].split(',')
+    layer_name = my_input['layer_name']
     #colloquial_name = event['colloquial_name']
     # e.g. '1.1.0'
-    version = my_input['version']
     python_versions = my_input['python_versions']
     init_script = [
         '#!/bin/bash',
@@ -36,10 +38,11 @@ def lambda_handler(event, context):
         #'sudo systemctl enable docker.service',
         #'sudo systemctl start docker.service',
         #'sudo systemctl status docker.service',
-        f'echo "{lib_pip_name}=={version}" >> requirements.txt',
     ]
+    for dependency in dependencies:
+        init_script.append(f'echo "{dependency}" >> requirements.txt\n')
     # e.g. ['python3.8', 'python3.9']
-    layer_publish_command = f'aws lambda publish-layer-version --layer-name {lib_pip_name}-{version.replace(".","-")}-layer-factory --description "{lib_pip_name}-{version} created by Layer Factory" --zip-file fileb://archive.zip --compatible-runtimes'
+    layer_publish_command = f'aws lambda publish-layer-version --layer-name {layer_name}-layer-factory --description "{layer_name} created by Layer Factory" --zip-file fileb://archive.zip --compatible-runtimes'
     esc_quote = r'\"'
     for python_version in python_versions:
         init_script.append(f'mkdir -p "python/lib/{python_version}/site-packages/"')
@@ -48,12 +51,12 @@ def lambda_handler(event, context):
     layer_publish_command += ' --region "us-east-1"'
     init_script_wrapup = [
         'zip -r archive.zip python > /dev/null',
-        f'aws s3 cp archive.zip s3://{layer_dest_bucket}/{lib_pip_name}-{version.replace(".","-")}-{datetime_str}.zip',
-        f'aws s3 presign "s3://{layer_dest_bucket}/{lib_pip_name}' + f'-{version.replace(".","-")}-' + f'{datetime_str}.zip" --region us-east-1 --expires-in 604800 >> presigned\n'
+        f'aws s3 cp archive.zip s3://{layer_dest_bucket}/{layer_name}-{datetime_str}.zip',
+        f'aws s3 presign "s3://{layer_dest_bucket}/{layer_name}' + f'-' + f'{datetime_str}.zip" --region us-east-1 --expires-in 604800 >> presigned\n'
         'export PRESIGNED_URL=$(cat presigned)',
-        layer_publish_command,
+        #layer_publish_command,
         # TODO: make region configurable
-        f'aws stepfunctions send-task-success --task-token "{token}" --task-output "{{{esc_quote}result{esc_quote}: {esc_quote}Success!{esc_quote}, {esc_quote}presigned_url{esc_quote}: {esc_quote}$PRESIGNED_URL{esc_quote}, {esc_quote}layer_name{esc_quote}: {esc_quote}{lib_pip_name}-{version}{esc_quote}}}" --region us-east-1',
+        f'aws stepfunctions send-task-success --task-token "{token}" --task-output "{{{esc_quote}result{esc_quote}: {esc_quote}Success!{esc_quote}, {esc_quote}presigned_url{esc_quote}: {esc_quote}$PRESIGNED_URL{esc_quote}, {esc_quote}layer_name{esc_quote}: {esc_quote}{layer_name}{esc_quote}}}" --region us-east-1',
         'shutdown -h now'
     ]
     init_script.extend(init_script_wrapup)

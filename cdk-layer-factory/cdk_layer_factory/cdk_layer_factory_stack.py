@@ -114,8 +114,8 @@ class CdkLayerFactoryStack(Stack):
         reap_ec2_instances_function_cdk.role.attach_inline_policy(lambda_ec2_reaper_policy)
         lambda_target = targets.LambdaFunction(reap_ec2_instances_function_cdk)
 
-        cron_rule = events.Rule(self, "ScheduleRule",
-            schedule=events.Schedule.cron(minute="*", hour="*"),
+        cron_rule = events.Rule(self, "EC2ReaperSchedule",
+            schedule=events.Schedule.cron(minute="7/10", hour="*"),
             targets=[lambda_target]
         )
 
