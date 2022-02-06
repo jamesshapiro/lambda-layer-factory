@@ -4,6 +4,7 @@ from aws_cdk import (
     aws_iam as iam,
     Stack,
     aws_s3 as s3,
+    aws_dynamodb as dynamodb,
     aws_stepfunctions as stepfunctions,
     aws_stepfunctions_tasks as tasks,
     aws_apigateway as apigateway,
@@ -46,13 +47,13 @@ class CdkLayerFactoryStack(Stack):
         )
 
         layer_bucket = s3.Bucket(
-            self, "cdk-layer-factory-bucket",
+            self, 'cdk-layer-factory-bucket',
             encryption=s3.BucketEncryption.S3_MANAGED
         )
 
-        ec2_role = iam.Role(self, "cdk-layer-factory-ec2-role",
-            assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
-            description="Allow EC2 instance to write to layer S3 bucket and publish layer versions to Lambda"
+        ec2_role = iam.Role(self, 'cdk-layer-factory-ec2-role',
+            assumed_by=iam.ServicePrincipal('ec2.amazonaws.com'),
+            description='Allow EC2 instance to write to layer S3 bucket and publish layer versions to Lambda'
         )
 
         ec2_policy = iam.Policy(
@@ -75,11 +76,48 @@ class CdkLayerFactoryStack(Stack):
         )
 
         pytz_layer = lambda_.LayerVersion(
-            self, "pytz-layer",
+            self, 'pytz-layer',
             removal_policy=cdk.RemovalPolicy.DESTROY,
             code=lambda_.Code.from_asset('layers/pytz-2021.1.zip'),
             compatible_architectures=[lambda_.Architecture.X86_64]
         )
+
+        ulid_layer = lambda_.LayerVersion(
+            self, 'ulid-layer',
+            removal_policy=cdk.RemovalPolicy.DESTROY,
+            code=lambda_.Code.from_asset('layers/ulid-1.1.0.zip'),
+            compatible_architectures=[lambda_.Architecture.X86_64]
+        )
+
+        get_hash_function_cdk = lambda_.Function(
+            self, 'cdk-layer-factory-get-hash',
+            runtime=lambda_.Runtime.PYTHON_3_9,
+            code=lambda_.Code.from_asset('resources'),
+            handler='get_hash.lambda_handler',
+            timeout=Duration.seconds(10),
+            layers=[ulid_layer]
+        )
+
+        ddb_table = dynamodb.Table(
+            self, 'Table',
+            partition_key=dynamodb.Attribute(name='PK1', type=dynamodb.AttributeType.STRING),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST
+        )
+
+        check_cache_function_cdk = lambda_.Function(
+            self, 'cdk-layer-factory-check-cache',
+            runtime=lambda_.Runtime.PYTHON_3_9,
+            code=lambda_.Code.from_asset('resources'),
+            handler='check_cache.lambda_handler',
+            timeout=Duration.seconds(25),
+            environment={
+                'DDB_TABLE_NAME': ddb_table.table_name,
+                'S3_BUCKET': layer_bucket.bucket_name
+            },
+        )
+        
+        layer_bucket.grant_read(check_cache_function_cdk)
+        ddb_table.grant_read_data(check_cache_function_cdk)
 
         reap_ec2_instances_function_cdk = lambda_.Function(
             self, 'cdk-layer-factory-reap-instances',
@@ -114,13 +152,13 @@ class CdkLayerFactoryStack(Stack):
         reap_ec2_instances_function_cdk.role.attach_inline_policy(lambda_ec2_reaper_policy)
         lambda_target = targets.LambdaFunction(reap_ec2_instances_function_cdk)
 
-        cron_rule = events.Rule(self, "EC2ReaperSchedule",
-            schedule=events.Schedule.cron(minute="7/10", hour="*"),
+        events.Rule(self, 'EC2ReaperSchedule',
+            schedule=events.Schedule.cron(minute='7/10', hour='*'),
             targets=[lambda_target]
         )
 
         ec2_role.attach_inline_policy(ec2_policy)
-        cfn_instance_profile = iam.CfnInstanceProfile(self, "MyCfnInstanceProfile",
+        cfn_instance_profile = iam.CfnInstanceProfile(self, 'MyCfnInstanceProfile',
             roles=[ec2_role.role_name]
         )
 
@@ -138,46 +176,94 @@ class CdkLayerFactoryStack(Stack):
         )
         start_layer_creation_function_cdk.role.attach_inline_policy(run_ec2_lambda_policy)
 
-        start_ec2_state = tasks.LambdaInvoke(self, "Start EC2",
+        topic = sns.Topic(self, 'CDKLambdaFactoryTopic')
+        topic.add_subscription(subscriptions.EmailSubscription(email))
+
+        kwargs = {
+            'service':'ses',
+            'action':'sendEmail',
+            'parameters': {
+                'Destination': {
+                    'ToAddresses': stepfunctions.JsonPath.array(stepfunctions.JsonPath.string_at('$.email'))
+                },
+                'Message': {
+                    'Body': {
+                        'Html': {
+                            'Data': stepfunctions.JsonPath.format('<html><h3>Lambda Layer Created!</h3><p>Click <a href="{}">here</a> to download. Link is good for 6 hours. If it expires, just invoke the factory again to receive a new link.</p>', stepfunctions.JsonPath.string_at("$.taskresult.presigned_url"))
+                        }
+                    },
+                    'Subject': {
+                        'Data': stepfunctions.JsonPath.format('{} CREATED! (Run-ID: {})', stepfunctions.JsonPath.string_at('$.layer_name'), stepfunctions.JsonPath.string_at('$.hashresult.ulid'))
+                    }
+                },
+                'Source': f'Layer Factory Update <{sender}>'
+            },
+            'iam_action':'ses:SendEmail',
+            'result_path':'$.emailresult',
+            'iam_resources':[f'arn:aws:ses:{region}:{account_id}:identity/{sender}']
+        }
+
+        email_recipient_state = tasks.CallAwsService(self, 'SendEmail',**kwargs)
+        email_and_terminate = email_recipient_state
+
+        get_hash_state = tasks.LambdaInvoke(self, 'Get Hash',
+            lambda_function=get_hash_function_cdk,
+            payload=stepfunctions.TaskInput.from_object({
+                'input': stepfunctions.JsonPath.string_at('$')
+            }),
+            result_selector={
+                'layer_hash': stepfunctions.JsonPath.string_at('$.Payload.layer_hash'),
+                'ulid': stepfunctions.JsonPath.string_at('$.Payload.ulid'),
+            },
+            result_path='$.hashresult',
+            timeout=Duration.minutes(1)
+        )
+
+        check_cache_state = tasks.LambdaInvoke(self, 'Check Cache',
+            lambda_function=check_cache_function_cdk,
+            payload=stepfunctions.TaskInput.from_object({
+                'input': stepfunctions.JsonPath.string_at('$')
+            }),
+            result_selector={
+                'presigned_url': stepfunctions.JsonPath.string_at('$.Payload.presigned_url')
+            },
+            result_path='$.taskresult',
+            timeout=Duration.minutes(1)
+        )
+
+        cache_layer_state = tasks.DynamoPutItem(self, 'Cache Layer',
+            item={
+                'PK1': tasks.DynamoAttributeValue.from_string(stepfunctions.JsonPath.string_at('$.hashresult.layer_hash')),
+                'S3_BUCKET': tasks.DynamoAttributeValue.from_string(layer_bucket.bucket_name),
+                'S3_KEY': tasks.DynamoAttributeValue.from_string(stepfunctions.JsonPath.string_at('$.taskresult.s3_key')),
+            },
+            table=ddb_table,
+            result_path='$.ddb_result'
+        )
+
+        email_and_terminate = tasks.CallAwsService(self, 'Send Cached Email',**kwargs)
+        email_and_cache = tasks.CallAwsService(self, 'Send Uncached Email',**kwargs).next(cache_layer_state)
+
+        start_ec2_state = tasks.LambdaInvoke(self, 'Start EC2',
             lambda_function=start_layer_creation_function_cdk,
             integration_pattern=stepfunctions.IntegrationPattern.WAIT_FOR_TASK_TOKEN,
             payload=stepfunctions.TaskInput.from_object({
-                "token": stepfunctions.JsonPath.task_token,
-                "input": stepfunctions.JsonPath.string_at("$")
+                'token': stepfunctions.JsonPath.task_token,
+                'input': stepfunctions.JsonPath.string_at('$')
             }),
-            result_path="$.taskresult",
+            result_path='$.taskresult',
             timeout=Duration.hours(1)
-        )
+        ).next(email_and_cache)
 
-        topic = sns.Topic(self, "CDKLambdaFactoryTopic")
-        topic.add_subscription(subscriptions.EmailSubscription(email))
+        is_cached_choice_state = stepfunctions.Choice(self, 'Is It Cached?')
+        handle_uncached = start_ec2_state
+        #handle_cached = start_ec2_state
+        handle_cached = email_and_terminate
+        is_cached_choice_state.when(stepfunctions.Condition.string_equals('$.taskresult.presigned_url','NOT FOUND!'), handle_uncached)
+        is_cached_choice_state.otherwise(handle_cached)
+        definition = get_hash_state.next(check_cache_state).next(is_cached_choice_state)
 
-        email_recipient_state = tasks.CallAwsService(self, "SendEmail",
-            service="ses",
-            action="sendEmail",
-            parameters={
-                "Destination": {
-                    "ToAddresses": stepfunctions.JsonPath.array(stepfunctions.JsonPath.string_at("$.email"))
-                },
-                "Message": {
-                    "Body": {
-                        "Html": {
-                            "Data": stepfunctions.JsonPath.format('<html><h3>Lambda Layer Created!</h3><p>Click <a href="{}">here</a> to download. Link good for 6 hours.</p>', stepfunctions.JsonPath.string_at("$.taskresult.presigned_url"))
-                        }
-                    },
-                    "Subject": {
-                        "Data": stepfunctions.JsonPath.format('SUBJECT: {}', stepfunctions.JsonPath.string_at("$.taskresult.layer_name"))
-                    }
-                },
-                "Source": f'JS Comment Validator <{sender}>'
-            },
-            iam_action='ses:SendEmail',
-            iam_resources=[f'arn:aws:ses:{region}:{account_id}:identity/{sender}']
-        )
-
-        definition = start_ec2_state.next(email_recipient_state)
-
-        state_machine = stepfunctions.StateMachine(self, "cdk-lambda-layer-factory-state-machine",
+        state_machine = stepfunctions.StateMachine(self, 'cdk-lambda-layer-factory-state-machine',
             definition=definition
         )
 
@@ -189,7 +275,7 @@ class CdkLayerFactoryStack(Stack):
 
         credentials_role = iam.Role(
             self, 'cdk-sfn-demo-trigger-state-machine-role',
-            assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com"),
+            assumed_by=iam.ServicePrincipal('apigateway.amazonaws.com'),
         )
 
         trigger_state_machine_policy = iam.Policy(
@@ -201,29 +287,29 @@ class CdkLayerFactoryStack(Stack):
         )
         credentials_role.attach_inline_policy(trigger_state_machine_policy)
 
-        entry_point = api.root.add_resource("create-layer")
+        entry_point = api.root.add_resource('create-layer')
         entry_point.add_method(
             'POST',
             integration=apigateway.AwsIntegration(
                 service='states',
-                action="StartExecution",
-                integration_http_method="POST",
+                action='StartExecution',
+                integration_http_method='POST',
                 options=apigateway.IntegrationOptions(
                     credentials_role=credentials_role,
                     request_templates={
-                        "application/json": f'{{"input": "$util.escapeJavaScript($input.body)", "stateMachineArn": "{state_machine.state_machine_arn}"}}'
+                        'application/json': f'{{"input": "$util.escapeJavaScript($input.body)", "stateMachineArn": "{state_machine.state_machine_arn}"}}'
                     },
                     integration_responses=[
-                        apigateway.IntegrationResponse(status_code="200")
+                        apigateway.IntegrationResponse(status_code='200')
                     ],
                 )
             ),
-            method_responses=[apigateway.MethodResponse(status_code="200")]
+            method_responses=[apigateway.MethodResponse(status_code='200')]
         )
 
         cdk.CfnOutput(
-            self, "StepFunctionsApi",
-            description="CDK Lambda Factory Entry Point API",
+            self, 'StepFunctionsApi',
+            description='CDK Lambda Factory Entry Point API',
             value = f'https://{api.rest_api_id}.execute-api.us-east-1.amazonaws.com/prod/create-layer/'
         )
 

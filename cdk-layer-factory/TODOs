@@ -1,10 +1,10 @@
 [ ] Add support for other languages
 [ ] Add front-end UI
 [ ] Add SQS queue to rate limit the number of simultaneous EC2 instances running
-[ ] Cache popular layers
 [ ] Add support for testing in Python with a Lambda Function (create function, create Layer, test function on Layer)
 
 [x] Add native SES integration!
 [x] "Pre-bake" AMI with Docker and relevant images (Python)
 [x] Add support for DL-ing multiple libraries, not just a single library (Python)
 [x] Finish reaper function
+[x] Cache pre-built layers

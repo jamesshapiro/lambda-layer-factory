@@ -2,9 +2,11 @@ import boto3
 import datetime
 import os
 import sys
+import hashlib
 
 ec2_client = boto3.client('ec2')
 iam_client = boto3.client('iam')
+ddb_client = boto3.client('dynamodb')
 #ami_id = 'ami-0a8b4cd432b1c3063'
 ami_id = 'ami-0ef2003049dd4c459'
 instance_type = 't3.small'
@@ -15,7 +17,6 @@ instance_profile_arn = os.environ['INSTANCE_PROFILE_ARN']
 layer_dest_bucket = os.environ['LAYER_DEST_BUCKET']
 
 def lambda_handler(event, context):
-    print(f'{event=}')
     token = event['token']
     my_input = event['input']
     now = datetime.datetime.now()
@@ -56,7 +57,7 @@ def lambda_handler(event, context):
         'export PRESIGNED_URL=$(cat presigned)',
         #layer_publish_command,
         # TODO: make region configurable
-        f'aws stepfunctions send-task-success --task-token "{token}" --task-output "{{{esc_quote}result{esc_quote}: {esc_quote}Success!{esc_quote}, {esc_quote}presigned_url{esc_quote}: {esc_quote}$PRESIGNED_URL{esc_quote}, {esc_quote}layer_name{esc_quote}: {esc_quote}{layer_name}{esc_quote}}}" --region us-east-1',
+        f'aws stepfunctions send-task-success --task-token "{token}" --task-output "{{{esc_quote}result{esc_quote}: {esc_quote}Success!{esc_quote}, {esc_quote}presigned_url{esc_quote}: {esc_quote}$PRESIGNED_URL{esc_quote}, {esc_quote}layer_name{esc_quote}: {esc_quote}{layer_name}{esc_quote}, {esc_quote}s3_key{esc_quote}: {esc_quote}{layer_name}-{datetime_str}.zip{esc_quote}}}" --region us-east-1',
         'shutdown -h now'
     ]
     init_script.extend(init_script_wrapup)
