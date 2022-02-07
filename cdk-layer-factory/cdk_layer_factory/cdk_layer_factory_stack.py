@@ -12,6 +12,7 @@ from aws_cdk import (
     aws_sns_subscriptions as subscriptions,
     aws_events as events,
     aws_events_targets as targets,
+    aws_sqs as sqs
 )
 
 import aws_cdk as cdk
@@ -50,6 +51,8 @@ class CdkLayerFactoryStack(Stack):
             self, 'cdk-layer-factory-bucket',
             encryption=s3.BucketEncryption.S3_MANAGED
         )
+
+        job_queue = sqs.Queue(self, "JobQueue")
 
         ec2_role = iam.Role(self, 'cdk-layer-factory-ec2-role',
             assumed_by=iam.ServicePrincipal('ec2.amazonaws.com'),
@@ -115,6 +118,19 @@ class CdkLayerFactoryStack(Stack):
                 'S3_BUCKET': layer_bucket.bucket_name
             },
         )
+
+        worker_lambda = worker_function_cdk = lambda_.Function(
+            self, 'cdk-layer-factory-worker',
+            runtime=lambda_.Runtime.PYTHON_3_8,
+            code=lambda_.Code.from_asset('resources'),
+            handler='worker.lambda_handler',
+            timeout=Duration.seconds(15),
+            environment={
+                'QUEUE_URL': job_queue.queue_url,
+                'EC2_REGION': region,
+                'CONCURRENCY_LIMIT': '1'
+            }
+        )
         
         layer_bucket.grant_read(check_cache_function_cdk)
         ddb_table.grant_read_data(check_cache_function_cdk)
@@ -149,12 +165,33 @@ class CdkLayerFactoryStack(Stack):
             ]
         )
 
+        lambda_ec2_worker_policy = iam.Policy(
+            self, 'cdk-layer-factory-lambda-ec2-worker-policy',
+            statements=[
+                iam.PolicyStatement(
+                    actions=['ec2:DescribeInstances'],
+                    resources=['*']
+                ),
+                iam.PolicyStatement(
+                    actions=['states:SendTaskSuccess'],
+                    resources=['*']
+                )
+            ]
+        )
+
         reap_ec2_instances_function_cdk.role.attach_inline_policy(lambda_ec2_reaper_policy)
-        lambda_target = targets.LambdaFunction(reap_ec2_instances_function_cdk)
+        worker_function_cdk.role.attach_inline_policy(lambda_ec2_worker_policy)
+        reaper_lambda_target = targets.LambdaFunction(reap_ec2_instances_function_cdk)
+        worker_lambda_target = targets.LambdaFunction(worker_function_cdk)
 
         events.Rule(self, 'EC2ReaperSchedule',
             schedule=events.Schedule.cron(minute='7/10', hour='*'),
-            targets=[lambda_target]
+            targets=[reaper_lambda_target]
+        )
+
+        events.Rule(self, 'EC2WorkerSchedule',
+            schedule=events.Schedule.cron(minute='*', hour='*'),
+            targets=[worker_lambda_target]
         )
 
         ec2_role.attach_inline_policy(ec2_policy)
@@ -174,10 +211,29 @@ class CdkLayerFactoryStack(Stack):
                 'LAYER_DEST_BUCKET': layer_bucket.bucket_name
             }
         )
+
+        job_queue.grant_consume_messages(worker_lambda)
+
         start_layer_creation_function_cdk.role.attach_inline_policy(run_ec2_lambda_policy)
 
         topic = sns.Topic(self, 'CDKLambdaFactoryTopic')
         topic.add_subscription(subscriptions.EmailSubscription(email))
+
+        check_cache_kwargs = {
+            "lambda_function":check_cache_function_cdk,
+            "payload":stepfunctions.TaskInput.from_object({
+                'input': stepfunctions.JsonPath.string_at('$')
+            }),
+            "result_selector":{
+                'presigned_url': stepfunctions.JsonPath.string_at('$.Payload.presigned_url')
+            },
+            "result_path":'$.taskresult',
+            "timeout":Duration.minutes(1)
+        }
+
+        check_cache_state_1 = tasks.LambdaInvoke(self, 'Check Cache 1',
+            **check_cache_kwargs
+        )
 
         kwargs = {
             'service':'ses',
@@ -219,17 +275,7 @@ class CdkLayerFactoryStack(Stack):
             timeout=Duration.minutes(1)
         )
 
-        check_cache_state = tasks.LambdaInvoke(self, 'Check Cache',
-            lambda_function=check_cache_function_cdk,
-            payload=stepfunctions.TaskInput.from_object({
-                'input': stepfunctions.JsonPath.string_at('$')
-            }),
-            result_selector={
-                'presigned_url': stepfunctions.JsonPath.string_at('$.Payload.presigned_url')
-            },
-            result_path='$.taskresult',
-            timeout=Duration.minutes(1)
-        )
+        
 
         cache_layer_state = tasks.DynamoPutItem(self, 'Cache Layer',
             item={
@@ -255,13 +301,34 @@ class CdkLayerFactoryStack(Stack):
             timeout=Duration.hours(1)
         ).next(email_and_cache)
 
-        is_cached_choice_state = stepfunctions.Choice(self, 'Is It Cached?')
-        handle_uncached = start_ec2_state
-        #handle_cached = start_ec2_state
-        handle_cached = email_and_terminate
-        is_cached_choice_state.when(stepfunctions.Condition.string_equals('$.taskresult.presigned_url','NOT FOUND!'), handle_uncached)
-        is_cached_choice_state.otherwise(handle_cached)
-        definition = get_hash_state.next(check_cache_state).next(is_cached_choice_state)
+        check_cache_2_choice_state = stepfunctions.Choice(self, 'Is It Cached Post-Queue?')
+        handle_uncached_2 = start_ec2_state
+        handle_cached_2 = email_and_terminate
+        #handle_cached_2 = start_ec2_state
+        check_cache_2_choice_state.when(stepfunctions.Condition.string_equals('$.taskresult.presigned_url','NOT FOUND!'), handle_uncached_2)
+        check_cache_2_choice_state.otherwise(handle_cached_2)
+
+        check_cache_state_2 = tasks.LambdaInvoke(self, 'Check Cache 2',
+            **check_cache_kwargs
+        ).next(check_cache_2_choice_state)
+
+        queue_state = tasks.SqsSendMessage(self, "Queue",
+            queue = job_queue,
+            integration_pattern=stepfunctions.IntegrationPattern.WAIT_FOR_TASK_TOKEN,
+            message_body=stepfunctions.TaskInput.from_object({
+                "token": stepfunctions.JsonPath.task_token
+            }),
+            result_path='$.queueresult',
+        ).next(check_cache_state_2)
+
+        check_cache_1_choice_state = stepfunctions.Choice(self, 'Is It Cached Pre-Queue?')
+        handle_uncached_1 = queue_state
+        handle_cached_1 = email_and_terminate
+        #handle_cached_1 = queue_state
+        check_cache_1_choice_state.when(stepfunctions.Condition.string_equals('$.taskresult.presigned_url','NOT FOUND!'), handle_uncached_1)
+        check_cache_1_choice_state.otherwise(handle_cached_1)
+
+        definition = get_hash_state.next(check_cache_state_1).next(check_cache_1_choice_state)
 
         state_machine = stepfunctions.StateMachine(self, 'cdk-lambda-layer-factory-state-machine',
             definition=definition
