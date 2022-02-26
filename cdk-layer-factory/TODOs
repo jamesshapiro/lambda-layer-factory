@@ -4,6 +4,7 @@
 [ ] Add skip queue function
 [ ] Add estimated wait update
 [ ] Add support for testing in Python with a Lambda Function (create function, create Layer, test function on Layer)
+[ ] Implement DLQ
 
 [x] Add native SES integration!
 [x] "Pre-bake" AMI with Docker and relevant images (Python)
