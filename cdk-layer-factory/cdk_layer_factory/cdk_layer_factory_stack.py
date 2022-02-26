@@ -12,7 +12,13 @@ from aws_cdk import (
     aws_sns_subscriptions as subscriptions,
     aws_events as events,
     aws_events_targets as targets,
-    aws_sqs as sqs
+    aws_sqs as sqs,
+    aws_certificatemanager as certificatemanager,
+    aws_cloudfront as cloudfront,
+    aws_cloudfront_origins as origins,
+    aws_route53 as route53,
+    aws_route53_targets as route53_targets,
+    Aws, CfnOutput, Duration
 )
 
 import aws_cdk as cdk
@@ -26,10 +32,10 @@ class CdkLayerFactoryStack(Stack):
             lines = f.read().splitlines()
             # .cdk-params should be of the form:
             # account_id=12345678901234
-            account_id = [line for line in lines if line.startswith('account_id')][0].split('=')[1]
-            email = [line for line in lines if line.startswith('email')][0].split('=')[1]
-            sender = [line for line in lines if line.startswith('sender')][0].split('=')[1]
-            region = [line for line in lines if line.startswith('region')][0].split('=')[1]
+            email = [line for line in lines if line.startswith('email=')][0].split('=')[1]
+            sender = [line for line in lines if line.startswith('sender=')][0].split('=')[1]
+            subdomain = [line for line in lines if line.startswith('subdomain=')][0].split('=')[1]
+            lambda_layer_factory_dot_com_zone = [line for line in lines if line.startswith('lambda_layer_factory_dot_com_zone=')][0].split('=')[1]
         run_ec2_lambda_policy = iam.Policy(
             self, 'cdk-layer-factory-start-creation-policy',
             statements=[
@@ -127,7 +133,7 @@ class CdkLayerFactoryStack(Stack):
             timeout=Duration.seconds(15),
             environment={
                 'QUEUE_URL': job_queue.queue_url,
-                'EC2_REGION': region,
+                'EC2_REGION': Aws.REGION,
                 'CONCURRENCY_LIMIT': '1'
             }
         )
@@ -143,7 +149,7 @@ class CdkLayerFactoryStack(Stack):
             timeout=Duration.seconds(120),
             memory_size=128,
             environment={
-                'EC2_REGION': region
+                'EC2_REGION': Aws.REGION
             },
             layers=[pytz_layer]
         )
@@ -256,7 +262,7 @@ class CdkLayerFactoryStack(Stack):
             },
             'iam_action':'ses:SendEmail',
             'result_path':'$.emailresult',
-            'iam_resources':[f'arn:aws:ses:{region}:{account_id}:identity/{sender}']
+            'iam_resources':[f'arn:aws:ses:{Aws.REGION}:{Aws.ACCOUNT_ID}:identity/{sender}']
         }
 
         email_recipient_state = tasks.CallAwsService(self, 'SendEmail',**kwargs)
@@ -378,6 +384,75 @@ class CdkLayerFactoryStack(Stack):
             self, 'StepFunctionsApi',
             description='CDK Lambda Factory Entry Point API',
             value = f'https://{api.rest_api_id}.execute-api.us-east-1.amazonaws.com/prod/create-layer/'
+        )
+
+
+        ######## FRONT-END WEBSITE ########
+        zone = route53.HostedZone.from_hosted_zone_attributes(self, "HostedZone",
+            hosted_zone_id=lambda_layer_factory_dot_com_zone,
+            zone_name=subdomain
+        )
+
+        site_bucket = s3.Bucket(
+            self, f'{subdomain}-bucket',
+        )
+        certificate = certificatemanager.DnsValidatedCertificate(
+            self, f'{subdomain}-certificate',
+            domain_name=subdomain,
+            hosted_zone=zone,
+            subject_alternative_names=[f'www.{subdomain}']
+        )
+        
+        domain_names = [subdomain, f'www.{subdomain}']
+        server_router_function = cloudfront.experimental.EdgeFunction(self, "ServerRouter",
+            runtime=lambda_.Runtime.PYTHON_3_9,
+            code=lambda_.Code.from_asset('lambda_edge'),
+            handler='server_router.lambda_handler',
+        )
+        
+        distribution = cloudfront.Distribution(
+            self, f'{subdomain}-distribution',
+            default_behavior=cloudfront.BehaviorOptions(
+                origin=origins.S3Origin(site_bucket),
+                allowed_methods=cloudfront.AllowedMethods.ALLOW_ALL,
+                viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                edge_lambdas=[
+                    cloudfront.EdgeLambda(
+                        function_version=server_router_function.current_version,
+                        event_type=cloudfront.LambdaEdgeEventType.VIEWER_REQUEST
+                    )
+                ]
+            ),
+            error_responses=[
+                cloudfront.ErrorResponse(
+                    http_status=403,
+                    response_http_status=200,
+                    response_page_path="/index.html",
+                    ttl=Duration.minutes(30)
+                )
+            ],
+            comment=f'{subdomain} S3 HTTPS',
+            default_root_object='index.html',
+            domain_names=domain_names,
+            certificate=certificate
+        )
+
+        CfnOutput(self, f'{subdomain}-cf-distribution', value=distribution.distribution_id)
+        a_record_target = route53.RecordTarget.from_alias(route53_targets.CloudFrontTarget(distribution))
+        record = route53.ARecord(
+            self, f'{subdomain}-alias-record',
+            zone=zone,
+            target=a_record_target,
+            record_name=subdomain
+        )
+        CfnOutput(self, f'{subdomain}-bucket-name', value=site_bucket.bucket_name)
+        # www.lambdalayerfactory.com -> lambdalayerfactory.com
+        a_record_target = route53.RecordTarget.from_alias(route53_targets.Route53RecordTarget(record))
+        route53.CnameRecord(
+            self, f'www-{subdomain}-alias-record',
+            zone=zone,
+            domain_name=f'{subdomain}.',
+            record_name=f'www.{subdomain}'
         )
 
 
