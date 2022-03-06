@@ -18,6 +18,7 @@ class App extends React.Component {
       language: 'python',
       runtimes: [],
       dependencies: [''],
+      runtimeSelector: this.getRuntimes('python'),
     }
   }
 
@@ -27,10 +28,19 @@ class App extends React.Component {
     this.setState({ language: event.target.value })
   }
 
+  handleDependencyChange(i, event) {
+    //let username = this.state.username
+    let dependencies = [...this.state.dependencies]
+    dependencies[i] = event.target.value
+    this.setState({ dependencies })
+    console.log(event.target.value)
+  }
+
   handleLanguageChange(event) {
     //let username = this.state.username
-    console.log(event.target.value)
-    this.setState({ layerName: event.target.value })
+    //console.log(event.target.value)
+    const runtimeSelector = this.getRuntimes(event.target.value)
+    this.setState({ language: event.target.value, runtimeSelector })
   }
 
   handleRuntimeChange(event) {
@@ -76,8 +86,8 @@ class App extends React.Component {
     })
   }
 
-  getRuntimes = () => {
-    if (this.state.language === 'python') {
+  getRuntimes = (language) => {
+    if (language === 'python') {
       return (
         <select
           onChange={this.handleRuntimeChange.bind(this)}
@@ -89,6 +99,69 @@ class App extends React.Component {
           <option value="python3.7">Python 3.7</option>
           <option value="python3.8">Python 3.8</option>
           <option value="python3.9">Python 3.9</option>
+        </select>
+      )
+    } else if (language === 'node') {
+      return (
+        <select
+          onChange={this.handleRuntimeChange.bind(this)}
+          name="runtimes"
+          id="runtimes"
+          multiple
+        >
+          <option value="node12.x">Node.js 12.x</option>
+          <option value="node14.x">Node.js 14.x</option>
+        </select>
+      )
+    } else if (language === 'ruby') {
+      return (
+        <select
+          onChange={this.handleRuntimeChange.bind(this)}
+          name="runtimes"
+          id="runtimes"
+          multiple
+        >
+          <option value="ruby2.7" selected>
+            Ruby 2.7
+          </option>
+        </select>
+      )
+    } else if (language === 'go') {
+      return (
+        <select
+          onChange={this.handleRuntimeChange.bind(this)}
+          name="runtimes"
+          id="runtimes"
+          multiple
+        >
+          <option value="go1.x" selected>
+            Go 1.x
+          </option>
+        </select>
+      )
+    } else if (language === 'java') {
+      return (
+        <select
+          onChange={this.handleRuntimeChange.bind(this)}
+          name="runtimes"
+          id="runtimes"
+          multiple
+        >
+          <option value="java8al1">Java 8 on Amazon Linux 1</option>
+          <option value="java8al2">Java 8 on Amazon Linux 2</option>
+          <option value="java11">Java 11 (Corretto)</option>
+        </select>
+      )
+    } else if (language === 'net') {
+      return (
+        <select
+          onChange={this.handleRuntimeChange.bind(this)}
+          name="runtimes"
+          id="runtimes"
+          multiple
+        >
+          <option value="net3.1">.NET Core 3.1 (C#/Powershell)</option>
+          <option value="net6">.NET Core 6 (C#/Powershell)</option>
         </select>
       )
     }
@@ -119,6 +192,10 @@ class App extends React.Component {
                 >
                   <option value="python">Python</option>
                   <option value="node">Node</option>
+                  <option value="ruby">Ruby</option>
+                  <option value="java">Java</option>
+                  <option value="go">Go</option>
+                  <option value="net">.NET</option>
                 </select>
               </td>
             </tr>
@@ -136,16 +213,24 @@ class App extends React.Component {
                   </div>
                 </td>
                 <td className="td-textarea">
-                  <textarea
+                  <input
                     value={el || ''}
+                    placeholder={'dependency, e.g. "requests"'}
                     className="bullet-textarea"
-                    onChange={this.handleLayerNameChange.bind(this, i)}
+                    onChange={this.handleDependencyChange.bind(this, i)}
+                  />
+                </td>
+                <td className="td-textarea">
+                  <input
+                    placeholder={'version, e.g. "2.25.1"'}
+                    className="version-textarea"
+                    onChange={this.handleDependencyChange.bind(this, i)}
                   />
                 </td>
                 <td className="td-button">
                   <div
                     type="button"
-                    className="bullet-button"
+                    className="right-bullet-button"
                     value="-"
                     onClick={this.removeClick.bind(this, i)}
                   >
@@ -155,7 +240,7 @@ class App extends React.Component {
               </tr>
             ))}
             <tr>
-              <td>{this.getRuntimes()}</td>
+              <td>{this.state.runtimeSelector}</td>
             </tr>
             <tr>
               <td></td>
@@ -178,6 +263,8 @@ class App extends React.Component {
   componentDidMount() {
     // this.getNewEntries()
   }
+
+  componentDidUpdate() {}
 
   getEditHabitsMode = () => {
     return (
