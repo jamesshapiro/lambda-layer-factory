@@ -14,16 +14,36 @@ class App extends React.Component {
   constructor(props) {
     super(props)
     this.state = {
+      layerName: '',
       language: 'python',
       runtimes: [],
       dependencies: [''],
     }
   }
 
-  handleChange(event) {
+  handleLayerNameChange(event) {
     //let username = this.state.username
     console.log(event.target.value)
-    this.setState({ username: event.target.value })
+    this.setState({ language: event.target.value })
+  }
+
+  handleLanguageChange(event) {
+    //let username = this.state.username
+    console.log(event.target.value)
+    this.setState({ layerName: event.target.value })
+  }
+
+  handleRuntimeChange(event) {
+    //let username = this.state.username
+    let options = event.target.options
+    let value = []
+    for (let i = 0, l = options.length; i < l; i++) {
+      if (options[i].selected) {
+        value.push(options[i].value)
+      }
+    }
+    console.log(value)
+    this.setState({ runtimes: value })
   }
 
   handleSelect(event) {
@@ -56,6 +76,24 @@ class App extends React.Component {
     })
   }
 
+  getRuntimes = () => {
+    if (this.state.language === 'python') {
+      return (
+        <select
+          onChange={this.handleRuntimeChange.bind(this)}
+          name="runtimes"
+          id="runtimes"
+          multiple
+        >
+          <option value="python3.6">Python 3.6</option>
+          <option value="python3.7">Python 3.7</option>
+          <option value="python3.8">Python 3.8</option>
+          <option value="python3.9">Python 3.9</option>
+        </select>
+      )
+    }
+  }
+
   createUI = () => {
     return (
       <>
@@ -67,7 +105,7 @@ class App extends React.Component {
                 <input
                   placeholder={'[layer name here (optional)]'}
                   className="bullet-textarea"
-                  onChange={this.handleChange.bind(this)}
+                  onChange={this.handleLayerNameChange.bind(this)}
                 />
               </td>
             </tr>
@@ -75,7 +113,7 @@ class App extends React.Component {
               <td>Language</td>
               <td>
                 <select
-                  onChange={this.handleChange.bind(this)}
+                  onChange={this.handleLanguageChange.bind(this)}
                   name="language"
                   id="language"
                 >
@@ -101,7 +139,7 @@ class App extends React.Component {
                   <textarea
                     value={el || ''}
                     className="bullet-textarea"
-                    onChange={this.handleChange.bind(this, i)}
+                    onChange={this.handleLayerNameChange.bind(this, i)}
                   />
                 </td>
                 <td className="td-button">
@@ -116,6 +154,9 @@ class App extends React.Component {
                 </td>
               </tr>
             ))}
+            <tr>
+              <td>{this.getRuntimes()}</td>
+            </tr>
             <tr>
               <td></td>
               <td>
