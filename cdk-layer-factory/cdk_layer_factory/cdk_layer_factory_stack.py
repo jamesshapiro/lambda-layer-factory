@@ -343,7 +343,15 @@ class CdkLayerFactoryStack(Stack):
         api = apigateway.RestApi(
             self,
             'cdk-lambda-layer-factory-api',
-            description='CDK Lambda Layer Factory.'
+            description='CDK Lambda Layer Factory.',
+            deploy_options=apigateway.StageOptions(
+                logging_level=apigateway.MethodLoggingLevel.INFO,
+                data_trace_enabled=True
+            ),
+            default_cors_preflight_options=apigateway.CorsOptions(
+                allow_origins=apigateway.Cors.ALL_ORIGINS,
+                allow_methods=apigateway.Cors.ALL_METHODS
+            )
         )
 
         credentials_role = iam.Role(
@@ -360,7 +368,13 @@ class CdkLayerFactoryStack(Stack):
         )
         credentials_role.attach_inline_policy(trigger_state_machine_policy)
 
-        entry_point = api.root.add_resource('create-layer')
+        entry_point = api.root.add_resource('create-layer',
+            default_cors_preflight_options=apigateway.CorsOptions(
+                allow_origins=apigateway.Cors.ALL_ORIGINS,
+                allow_methods=["GET", "POST"]
+            )
+        )
+        
         entry_point.add_method(
             'POST',
             integration=apigateway.AwsIntegration(

@@ -1,12 +1,9 @@
 /////////////////PROD//////////////////
 // npm run build
-// PROD: aws s3 cp --recursive build/ s3://cdkhabits-githabitcombucket6a79c338-hk3nkues0h5f
-// PROD: aws cloudfront create-invalidation --distribution-id E2WZ67Q81CV1B5 --paths "/*"
-// FFB: npm run build && aws s3 cp --recursive build/ s3://cdkhabits-githabitcombucket6a79c338-hk3nkues0h5f && aws cloudfront create-invalidation --distribution-id E2WZ67Q81CV1B5 --paths "/*"
-/////////////////PROD//////////////////
-// npm run build
-// DEV: aws s3 cp --recursive build/ s3://cdkhabits-habitsweakerpotionscombucketdff06391-116yh481gtpp6
-// DEV: aws cloudfront create-invalidation --distribution-id E70XD704NPJDM --paths "/*"
+// PROD: aws s3 cp --recursive build/ s3://layerfactory-lambdalayerfactorycombucketef8645bd-dwllqbzsmy6p
+// PROD: aws cloudfront create-invalidation --distribution-id E1LIL67TZCUW2P --paths "/*"
+// FFB: npm run build && aws s3 cp --recursive build/ s3://layerfactory-lambdalayerfactorycombucketef8645bd-dwllqbzsmy6p && aws cloudfront create-invalidation --distribution-id E1LIL67TZCUW2P --paths "/*"
+
 import './App.css'
 import React from 'react'
 
@@ -15,36 +12,41 @@ class App extends React.Component {
     super(props)
     this.state = {
       layerName: '',
+      email: '',
       language: 'python',
       runtimes: [],
       dependencies: [''],
+      versions: [''],
       runtimeSelector: this.getRuntimes('python'),
     }
   }
 
   handleLayerNameChange(event) {
-    //let username = this.state.username
-    console.log(event.target.value)
-    this.setState({ language: event.target.value })
+    this.setState({ layerName: event.target.value })
+  }
+
+  handleEmailChange(event) {
+    this.setState({ email: event.target.value })
   }
 
   handleDependencyChange(i, event) {
-    //let username = this.state.username
     let dependencies = [...this.state.dependencies]
     dependencies[i] = event.target.value
     this.setState({ dependencies })
-    console.log(event.target.value)
+  }
+
+  handleVersionChange(i, event) {
+    let versions = [...this.state.versions]
+    versions[i] = event.target.value
+    this.setState({ versions })
   }
 
   handleLanguageChange(event) {
-    //let username = this.state.username
-    //console.log(event.target.value)
     const runtimeSelector = this.getRuntimes(event.target.value)
     this.setState({ language: event.target.value, runtimeSelector })
   }
 
   handleRuntimeChange(event) {
-    //let username = this.state.username
     let options = event.target.options
     let value = []
     for (let i = 0, l = options.length; i < l; i++) {
@@ -54,11 +56,6 @@ class App extends React.Component {
     }
     console.log(value)
     this.setState({ runtimes: value })
-  }
-
-  handleSelect(event) {
-    console.log(event.target.value)
-    // this.setState({ username: event.target.value })
   }
 
   addClick() {
@@ -74,13 +71,29 @@ class App extends React.Component {
   }
 
   handleSubmit = (i) => {
+    if (this.state.runtimes.length < 1) {
+      return
+    }
     console.log('handling submit')
+    let layerName = this.state.layerName ? this.state.layerName : 'default'
+    let email = this.state.email
+    const dependencies = this.state.dependencies.map((dependency, i) => {
+      return `${dependency}==${this.state.versions[i]}`
+    }).join(',')
+    const data = {
+      layer_name: layerName, 
+      email,
+      dependencies,
+      python_versions: this.state.runtimes
+    }
     const url = process.env.REACT_APP_REQUEST_LAYER_URL
-    const headers = {}
+    const headers = { 'Content-Type': 'application/json' }
     const final_url = url
     fetch(final_url, {
-      method: 'GET',
+      method: 'POST',
+      mode: 'cors',
       headers: headers,
+      body: JSON.stringify(data),
     }).then((response) => {
       console.log(response)
     })
@@ -173,6 +186,16 @@ class App extends React.Component {
         <table className="habit-ui-table">
           <tbody>
             <tr>
+              <td>Email*:</td>
+              <td className="td-textarea">
+                <input
+                  placeholder={'email@example.com'}
+                  className="bullet-textarea"
+                  onChange={this.handleEmailChange.bind(this)}
+                />
+              </td>
+            </tr>
+            <tr>
               <td>User Input:</td>
               <td className="td-textarea">
                 <input
@@ -224,7 +247,7 @@ class App extends React.Component {
                   <input
                     placeholder={'version, e.g. "2.25.1"'}
                     className="version-textarea"
-                    onChange={this.handleDependencyChange.bind(this, i)}
+                    onChange={this.handleVersionChange.bind(this, i)}
                   />
                 </td>
                 <td className="td-button">
@@ -248,7 +271,7 @@ class App extends React.Component {
                 <div
                   type="button"
                   className="create-layer-button"
-                  onClick={this.addClick.bind(this)}
+                  onClick={this.handleSubmit}
                 >
                   Create Layer!
                 </div>
