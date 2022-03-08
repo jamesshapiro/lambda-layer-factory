@@ -101,7 +101,7 @@ class CdkLayerFactoryStack(Stack):
         get_hash_function_cdk = lambda_.Function(
             self, 'cdk-layer-factory-get-hash',
             runtime=lambda_.Runtime.PYTHON_3_9,
-            code=lambda_.Code.from_asset('resources'),
+            code=lambda_.Code.from_asset('functions'),
             handler='get_hash.lambda_handler',
             timeout=Duration.seconds(10),
             layers=[ulid_layer]
@@ -116,7 +116,7 @@ class CdkLayerFactoryStack(Stack):
         check_cache_function_cdk = lambda_.Function(
             self, 'cdk-layer-factory-check-cache',
             runtime=lambda_.Runtime.PYTHON_3_9,
-            code=lambda_.Code.from_asset('resources'),
+            code=lambda_.Code.from_asset('functions'),
             handler='check_cache.lambda_handler',
             timeout=Duration.seconds(25),
             environment={
@@ -128,7 +128,7 @@ class CdkLayerFactoryStack(Stack):
         worker_lambda = worker_function_cdk = lambda_.Function(
             self, 'cdk-layer-factory-worker',
             runtime=lambda_.Runtime.PYTHON_3_8,
-            code=lambda_.Code.from_asset('resources'),
+            code=lambda_.Code.from_asset('functions'),
             handler='worker.lambda_handler',
             timeout=Duration.seconds(15),
             environment={
@@ -144,7 +144,7 @@ class CdkLayerFactoryStack(Stack):
         reap_ec2_instances_function_cdk = lambda_.Function(
             self, 'cdk-layer-factory-reap-instances',
             runtime=lambda_.Runtime.PYTHON_3_8,
-            code=lambda_.Code.from_asset('resources'),
+            code=lambda_.Code.from_asset('functions'),
             handler='reap_instances.lambda_handler',
             timeout=Duration.seconds(120),
             memory_size=128,
@@ -208,7 +208,7 @@ class CdkLayerFactoryStack(Stack):
         start_layer_creation_function_cdk = lambda_.Function(
             self, 'cdk-layer-factory-start-creation',
             runtime=lambda_.Runtime.PYTHON_3_8,
-            code=lambda_.Code.from_asset('resources'),
+            code=lambda_.Code.from_asset('functions'),
             handler='start_layer_creation.lambda_handler',
             timeout=Duration.seconds(120),
             memory_size=128,
@@ -374,7 +374,7 @@ class CdkLayerFactoryStack(Stack):
                 allow_methods=["GET", "POST"]
             )
         )
-        
+
         entry_point.add_method(
             'POST',
             integration=apigateway.AwsIntegration(

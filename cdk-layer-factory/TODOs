@@ -1,10 +1,22 @@
 [ ] Add support for other languages
-[ ] Add front-end UI
-[ ] Add priority queue that gets checked first
-[ ] Add skip queue function
-[ ] Add estimated wait update
+[ ] Add "high-priority" queue that gets checked first
+[ ] Add "skip-the-queue" feature to function that avoids queueing if no EC2 instances are being used
+[ ] Email user an estimated wait update
 [ ] Add support for testing in Python with a Lambda Function (create function, create Layer, test function on Layer)
 [ ] Implement DLQ
+[ ] update the from email for layer factory to avoid spam filters
+[ ] add email validation step to avoid spam
+[ ] add CAPTCHA potentially
+[ ] add list of included packages
+[ ] add ability to upload a dependency file
+[ ] add backend validation (e.g. does the language match the runtime, etc.)
+[ ] add natively integrated one-click email approval
+[ ] fix CORS issue
+[ ] add auto-suggest based on PyPI / other APIs
+[ ] improve UI
+[ ] make API arguments language agnostic (i.e. not "python-runtimes")
+[ ] make version # optional (for Python at least)
+[ ] add ability to upload a requirements.txt file
 
 [x] Add native SES integration!
 [x] "Pre-bake" AMI with Docker and relevant images (Python)
@@ -12,3 +24,4 @@
 [x] Finish reaper function
 [x] Add SQS queue to rate limit the number of simultaneous EC2 instances running
 [x] Cache pre-built layers
+[x] Add front-end UI
