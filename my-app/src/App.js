@@ -84,7 +84,7 @@ class App extends React.Component {
       layer_name: layerName, 
       email,
       dependencies,
-      python_versions: this.state.runtimes
+      runtimes: this.state.runtimes
     }
     const url = process.env.REACT_APP_REQUEST_LAYER_URL
     const headers = { 'Content-Type': 'application/json' }

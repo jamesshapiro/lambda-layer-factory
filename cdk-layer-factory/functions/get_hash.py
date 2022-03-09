@@ -4,10 +4,10 @@ import ulid
 def get_ulid():
     return str(ulid.new())[-6:]
 
-def get_hash(dependencies, python_versions):
+def get_hash(dependencies, runtimes):
     dependencies = sorted(dependencies)
-    python_versions = sorted(python_versions)
-    layer_content = f'{python_versions}::{dependencies}'
+    runtimes = sorted(runtimes)
+    layer_content = f'{runtimes}::{dependencies}'
     m = hashlib.sha256()
     m.update(layer_content.encode())
     return str(m.hexdigest())
@@ -15,6 +15,6 @@ def get_hash(dependencies, python_versions):
 def lambda_handler(event, context):
     my_input = event['input']
     dependencies = my_input['dependencies'].split(',')
-    python_versions = my_input['python_versions']
-    layer_hash = get_hash(dependencies, python_versions)
+    runtimes = my_input['runtimes']
+    layer_hash = get_hash(dependencies, runtimes)
     return {'layer_hash': layer_hash, 'ulid': get_ulid()}

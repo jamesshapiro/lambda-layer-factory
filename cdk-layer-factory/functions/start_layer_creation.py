@@ -27,7 +27,7 @@ def lambda_handler(event, context):
     layer_name = my_input['layer_name']
     #colloquial_name = event['colloquial_name']
     # e.g. '1.1.0'
-    python_versions = my_input['python_versions']
+    runtimes = my_input['runtimes']
     init_script = [
         '#!/bin/bash',
         #'sleep 60\n'
@@ -45,10 +45,10 @@ def lambda_handler(event, context):
     # e.g. ['python3.8', 'python3.9']
     layer_publish_command = f'aws lambda publish-layer-version --layer-name {layer_name}-layer-factory --description "{layer_name} created by Layer Factory" --zip-file fileb://archive.zip --compatible-runtimes'
     esc_quote = r'\"'
-    for python_version in python_versions:
-        init_script.append(f'mkdir -p "python/lib/{python_version}/site-packages/"')
-        init_script.append(f'docker run -v "$PWD":/var/task "public.ecr.aws/sam/build-{python_version}" /bin/sh -c "pip install -r requirements.txt -t python/lib/{python_version}/site-packages/; exit"')
-        layer_publish_command += f' "{python_version}"'
+    for runtime in runtimes:
+        init_script.append(f'mkdir -p "python/lib/{runtime}/site-packages/"')
+        init_script.append(f'docker run -v "$PWD":/var/task "public.ecr.aws/sam/build-{runtime}" /bin/sh -c "pip install -r requirements.txt -t python/lib/{runtime}/site-packages/; exit"')
+        layer_publish_command += f' "{runtime}"'
     layer_publish_command += ' --region "us-east-1"'
     init_script_wrapup = [
         'zip -r archive.zip python > /dev/null',
