@@ -251,7 +251,7 @@ class CdkLayerFactoryStack(Stack):
                 'Message': {
                     'Body': {
                         'Html': {
-                            'Data': stepfunctions.JsonPath.format('<html><h3>Lambda Layer Created!</h3><p>Click <a href="{}">here</a> to download. Link is good for 6 hours. If it expires, just invoke the factory again to receive a new link.</p>', stepfunctions.JsonPath.string_at("$.taskresult.presigned_url"))
+                            'Data': stepfunctions.JsonPath.format('<html><h3>Lambda Layer Created!</h3><p>Click <a href="{}">here</a> to download. Link is good for 6 hours. If it expires, just invoke the factory again to receive a new link.</p><p>Dependencies: {}</p>', stepfunctions.JsonPath.string_at("$.taskresult.presigned_url"), stepfunctions.JsonPath.string_at('$.dependencies'))
                         }
                     },
                     'Subject': {
