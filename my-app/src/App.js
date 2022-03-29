@@ -77,6 +77,7 @@ class App extends React.Component {
     console.log('handling submit')
     let layerName = this.state.layerName ? this.state.layerName : 'default'
     let email = this.state.email
+    const language = this.state.language
     const dependencies = this.state.dependencies.map((dependency, i) => {
       return `${dependency}==${this.state.versions[i]}`
     }).join(',')
@@ -84,6 +85,7 @@ class App extends React.Component {
       layer_name: layerName, 
       email,
       dependencies,
+      language,
       runtimes: this.state.runtimes
     }
     const url = process.env.REACT_APP_REQUEST_LAYER_URL

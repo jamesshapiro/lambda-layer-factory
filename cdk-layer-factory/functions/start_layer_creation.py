@@ -16,40 +16,17 @@ subnet_id = 'subnet-c06751cf'
 instance_profile_arn = os.environ['INSTANCE_PROFILE_ARN']
 layer_dest_bucket = os.environ['LAYER_DEST_BUCKET']
 
-def lambda_handler(event, context):
-    token = event['token']
-    my_input = event['input']
-    now = datetime.datetime.now()
-    datetime_str = f'{now.year}-{now.month}-{now.day}-{now.hour}:{now.minute}:{now.second}'
-    # e.g. 'ulid-py'
-
-    dependencies = my_input['dependencies'].split(',')
-    layer_name = my_input['layer_name']
-    #colloquial_name = event['colloquial_name']
-    # e.g. '1.1.0'
-    runtimes = my_input['runtimes']
-    init_script = [
-        '#!/bin/bash',
-        #'sleep 60\n'
-        'cd ~\n'
-        #'sudo yum update -y\n',
-        #'sudo yum install ec2-instance-connect -y',
-        #'sudo yum search docker',
-        #'sudo yum install docker -y',
-        #'sudo systemctl enable docker.service',
-        #'sudo systemctl start docker.service',
-        #'sudo systemctl status docker.service',
-    ]
+def get_python_commands(runtimes, dependencies, layer_name, token, datetime_str):
+    init_script = ['#!/bin/bash','cd ~\n']
     for dependency in dependencies:
         init_script.append(f'echo "{dependency}" >> requirements.txt\n')
-    # e.g. ['python3.8', 'python3.9']
-    layer_publish_command = f'aws lambda publish-layer-version --layer-name {layer_name}-layer-factory --description "{layer_name} created by Layer Factory" --zip-file fileb://archive.zip --compatible-runtimes'
+    #layer_publish_command = f'aws lambda publish-layer-version --layer-name {layer_name}-layer-factory --description "{layer_name} created by Layer Factory" --zip-file fileb://archive.zip --compatible-runtimes'
     esc_quote = r'\"'
     for runtime in runtimes:
         init_script.append(f'mkdir -p "python/lib/{runtime}/site-packages/"')
         init_script.append(f'docker run -v "$PWD":/var/task "public.ecr.aws/sam/build-{runtime}" /bin/sh -c "pip install -r requirements.txt -t python/lib/{runtime}/site-packages/; exit"')
-        layer_publish_command += f' "{runtime}"'
-    layer_publish_command += ' --region "us-east-1"'
+        #layer_publish_command += f' "{runtime}"'
+    #layer_publish_command += ' --region "us-east-1"'
     init_script_wrapup = [
         'zip -r archive.zip python > /dev/null',
         f'aws s3 cp archive.zip s3://{layer_dest_bucket}/{layer_name}-{datetime_str}.zip',
@@ -62,6 +39,37 @@ def lambda_handler(event, context):
     ]
     init_script.extend(init_script_wrapup)
     init_script = '\n\n'.join(init_script)
+    return init_script
+
+# init_script = [
+    # '#!/bin/bash',
+    #'sleep 60\n'
+    # 'cd ~\n'
+    #'sudo yum update -y\n',
+    #'sudo yum install ec2-instance-connect -y',
+    #'sudo yum search docker',
+    #'sudo yum install docker -y',
+    #'sudo systemctl enable docker.service',
+    #'sudo systemctl start docker.service',
+    #'sudo systemctl status docker.service',
+# ]
+
+def lambda_handler(event, context):
+    token = event['token']
+    my_input = event['input']
+    now = datetime.datetime.now()
+    datetime_str = f'{now.year}-{now.month}-{now.day}-{now.hour}:{now.minute}:{now.second}'
+    # e.g. 'ulid-py'
+
+    dependencies = my_input['dependencies'].split(',')
+    layer_name = my_input['layer_name']
+    #colloquial_name = event['colloquial_name']
+    # e.g. '1.1.0'
+    runtimes = my_input['runtimes']
+    language = my_input['language']
+    #print(f'{language=}')
+    if language == 'python':
+        init_script = get_python_commands(runtimes, dependencies, layer_name, token, datetime_str)
     response = ec2_client.run_instances(
         BlockDeviceMappings=[
             {
