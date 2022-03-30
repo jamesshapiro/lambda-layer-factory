@@ -91,6 +91,14 @@ class App extends React.Component {
     const url = process.env.REACT_APP_REQUEST_LAYER_URL
     const headers = { 'Content-Type': 'application/json' }
     const final_url = url
+    alert(
+      'Your Lambda Layer creation request was submitted! Check your email for further information.'
+    )
+    this.setState({
+      dependencies: [''],
+      versions: [''],
+      runtimes: [],
+    })
     fetch(final_url, {
       method: 'POST',
       mode: 'cors',
@@ -99,6 +107,7 @@ class App extends React.Component {
     }).then((response) => {
       console.log(response)
     })
+    
   }
 
   getRuntimes = (language) => {
@@ -247,6 +256,7 @@ class App extends React.Component {
                 </td>
                 <td className="td-textarea">
                   <input
+                    value={this.state.versions[i] || ''}
                     placeholder={'version, e.g. "2.25.1"'}
                     className="version-textarea"
                     onChange={this.handleVersionChange.bind(this, i)}
