@@ -123,6 +123,8 @@ class App extends React.Component {
           <option value="python3.7">Python 3.7</option>
           <option value="python3.8">Python 3.8</option>
           <option value="python3.9">Python 3.9</option>
+          <option value="python3.10">Python 3.10</option>
+          <option value="python3.11">Python 3.11</option>
         </select>
       )
     } else if (language === 'node') {
