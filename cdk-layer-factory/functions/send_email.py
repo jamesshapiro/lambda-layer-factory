@@ -80,6 +80,7 @@ def lambda_handler(event, context):
                 'S3_KEY': {'S': s3_key},
                 'LAYER_NAME': {'S': layer_name},
                 'RUNTIMES': {'SS': runtimes if isinstance(runtimes, list) else [runtimes]},
+                'EMAIL': {'S': email},
                 'CREATED_AT': {'N': str(now)},
                 'TTL': {'N': str(now + SEVEN_DAYS)},
             }

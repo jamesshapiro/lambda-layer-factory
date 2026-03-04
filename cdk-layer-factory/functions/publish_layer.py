@@ -58,11 +58,13 @@ def lambda_handler(event, context):
     s3_key = item['S3_KEY']['S']
     layer_name = item['LAYER_NAME']['S']
     runtimes = list(item['RUNTIMES']['SS'])
+    email = item.get('EMAIL', {}).get('S', '')
+    layer_suffix = '-lf' if email == 'james.shapiro@gmail.com' else '-layer-factory'
 
     lambda_client = boto3.client('lambda', region_name=region)
 
     result = lambda_client.publish_layer_version(
-        LayerName=f'{layer_name}-layer-factory',
+        LayerName=f'{layer_name}{layer_suffix}',
         Description=f'{layer_name} created by Layer Factory',
         Content={
             'S3Bucket': s3_bucket,
