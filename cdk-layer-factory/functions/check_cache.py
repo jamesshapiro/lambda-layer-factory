@@ -30,5 +30,5 @@ def lambda_handler(event, context):
             },
             ExpiresIn=21600
         )
-        return {'presigned_url': url}
-    return {'presigned_url': 'NOT FOUND!'}
+        return {'presigned_url': url, 's3_key': key}
+    return {'presigned_url': 'NOT FOUND!', 's3_key': ''}
