@@ -94,7 +94,22 @@ def lambda_handler(event, context):
             f'<tr><td style="padding:12px 0;">{buttons_html}</td></tr>'
         )
 
-    html = build_email_html(layer_name, presigned_url, dependencies, publish_section)
+    ssl_note = ''
+    is_ruby = any(r.startswith('ruby') for r in (runtimes if isinstance(runtimes, list) else [runtimes]))
+    has_nokogiri = 'nokogiri' in dependencies.lower() if isinstance(dependencies, str) else any('nokogiri' in d.lower() for d in dependencies)
+    if is_ruby and has_nokogiri:
+        ssl_note = (
+            '<tr><td style="color:#1a1a1a; font-size:13px; line-height:1.6; '
+            'border-top:1px solid #d6d1c9; padding-top:16px; margin-top:24px;">'
+            '<strong>Important:</strong> Nokogiri bundles its own OpenSSL, which '
+            'cannot find Lambda\'s CA certificates by default. Add this environment '
+            'variable to your Lambda function:'
+            '<br><code style="background:#f0ede8; padding:2px 6px; border-radius:4px; '
+            'font-size:12px;">SSL_CERT_FILE=/etc/pki/tls/certs/ca-bundle.crt</code>'
+            '</td></tr>'
+        )
+
+    html = build_email_html(layer_name, presigned_url, dependencies, publish_section + ssl_note)
 
     ses_client.send_email(
         Source=f'Layer Factory Update <{SES_SENDER}>',

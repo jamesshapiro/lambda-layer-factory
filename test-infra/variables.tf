@@ -7,7 +7,13 @@ variable "aws_region" {
 variable "nokogiri_layer_arn" {
   description = "ARN of the Nokogiri Lambda layer"
   type        = string
-  default     = "arn:aws:lambda:us-east-1:306468203480:layer:rb-33-nokogiri-lf:1"
+  default     = "arn:aws:lambda:us-east-1:306468203480:layer:rb-34-nokogiri-lf:1"
+}
+
+variable "runtime" {
+  description = "Lambda Ruby runtime version"
+  type        = string
+  default     = "ruby3.4"
 }
 
 variable "bucket_name" {

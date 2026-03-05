@@ -64,7 +64,7 @@ resource "aws_lambda_function" "nokogiri_test" {
   function_name    = "nokogiri-test"
   role             = aws_iam_role.lambda.arn
   handler          = "lambda_function.lambda_handler"
-  runtime          = "ruby3.3"
+  runtime          = var.runtime
   timeout          = 30
   memory_size      = 256
   filename         = data.archive_file.lambda_zip.output_path
