@@ -43,7 +43,7 @@ class App extends React.Component {
 
   handleLanguageChange(event) {
     const runtimeSelector = this.getRuntimes(event.target.value)
-    this.setState({ language: event.target.value, runtimeSelector })
+    this.setState({ language: event.target.value, runtimeSelector, runtimes: [] })
   }
 
   handleRuntimeChange(event) {
