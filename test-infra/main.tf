@@ -74,7 +74,8 @@ resource "aws_lambda_function" "nokogiri_test" {
 
   environment {
     variables = {
-      BUCKET_NAME = aws_s3_bucket.test_output.id
+      BUCKET_NAME  = aws_s3_bucket.test_output.id
+      SSL_CERT_FILE = "/etc/pki/tls/certs/ca-bundle.crt"
     }
   }
 }
