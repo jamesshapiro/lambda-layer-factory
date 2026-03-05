@@ -15,7 +15,7 @@
 
 ```bash
 cd ~/code/lambda-layer-factory
-git add cdk-layer-factory/functions/send_email.py cdk-layer-factory/functions/publish_layer.py
+git add layer-factory/functions/send_email.py layer-factory/functions/publish_layer.py
 git commit -m "store email in publish record, conditional -lf suffix for james"
 git push
 ```
@@ -23,7 +23,7 @@ git push
 ## 2. Upload Lambda archive to S3
 
 ```bash
-cd ~/code/lambda-layer-factory/cdk-layer-factory/functions
+cd ~/code/lambda-layer-factory/layer-factory/functions
 zip archive.zip check_cache.py get_hash.py reap_instances.py send_email.py publish_layer.py start_layer_creation.py worker.py
 aws s3 cp archive.zip s3://athens-build-lambda-code/lambda-layer-factory/archive.zip
 ```

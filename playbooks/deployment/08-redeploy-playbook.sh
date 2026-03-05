@@ -2,7 +2,7 @@
 set -e
 
 echo "=== Step 1: Package and upload Lambda code ==="
-cd ~/code/lambda-layer-factory/cdk-layer-factory/functions
+cd ~/code/lambda-layer-factory/layer-factory/functions
 zip archive.zip check_cache.py get_hash.py reap_instances.py send_email.py publish_layer.py start_layer_creation.py worker.py
 aws s3 cp archive.zip s3://athens-build-lambda-code/lambda-layer-factory/archive.zip
 
