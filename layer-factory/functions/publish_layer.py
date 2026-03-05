@@ -61,10 +61,15 @@ def lambda_handler(event, context):
     email = item.get('EMAIL', {}).get('S', '')
     layer_suffix = '-lf' if email == 'james.shapiro@gmail.com' else '-layer-factory'
 
+    full_layer_name = f'{layer_name}{layer_suffix}'
+    if not all(c.isalnum() or c in '-_' for c in full_layer_name):
+        return html_response(400, 'Invalid Layer Name',
+            f'<tr><td style="color:#1a1a1a; font-size:16px; line-height:1.6;">Layer name <strong>{full_layer_name}</strong> contains invalid characters. Only letters, numbers, hyphens, and underscores are allowed.</td></tr>')
+
     lambda_client = boto3.client('lambda', region_name=region)
 
     result = lambda_client.publish_layer_version(
-        LayerName=f'{layer_name}{layer_suffix}',
+        LayerName=full_layer_name,
         Description=f'{layer_name} created by Layer Factory',
         Content={
             'S3Bucket': s3_bucket,

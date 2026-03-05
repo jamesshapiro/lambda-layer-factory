@@ -142,7 +142,7 @@ def lambda_handler(event, context):
     datetime_str = f'{now.year}-{now.month}-{now.day}-{now.hour}:{now.minute}:{now.second}'
 
     dependencies = my_input['dependencies'].split(',')
-    layer_name = my_input['layer_name']
+    layer_name = my_input['layer_name'].replace('.', '-')
     runtimes = my_input['runtimes']
     language = my_input['language']
     auto_publish = my_input.get('auto_publish', False)

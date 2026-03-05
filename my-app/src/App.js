@@ -75,7 +75,7 @@ class App extends React.Component {
       return
     }
     console.log('handling submit')
-    let layerName = this.state.layerName ? this.state.layerName : 'default'
+    let layerName = this.state.layerName ? this.state.layerName.replace(/\./g, '-') : 'default'
     let email = this.state.email
     const language = this.state.language
     const dependencies = this.state.dependencies.map((dependency, i) => {
