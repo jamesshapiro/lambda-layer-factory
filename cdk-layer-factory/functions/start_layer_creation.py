@@ -97,7 +97,7 @@ def get_ruby_commands(runtimes, dependencies, layer_name, token, datetime_str, a
         dep = dep.strip()
         if '==' in dep:
             name, ver = dep.split('==', 1)
-            gem_args.append(f'{name} -v {ver}')
+            gem_args.append(f"'{name}:{ver}'")
         else:
             gem_args.append(dep)
     deps_str = ' '.join(gem_args)
